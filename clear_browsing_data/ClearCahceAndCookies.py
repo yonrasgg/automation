@@ -1,5 +1,6 @@
 import os
 import time
+import platform
 import psutil
 import requests
 import zipfile
@@ -8,20 +9,23 @@ from selenium import webdriver
 
 # ChromeDriver version and platform
 chrome_version = "latest"
-platform = "win64"
+platform_name = "win64"
 
 # Get chromedriver URL based on version and platform (win32, win64, mac64, linux64)
 def get_chromedriver_url(version, platform):
-    base_url = f"https://googlechromelabs.github.io/chrome-for-testing/{version}/chromedriver-{platform}.zip"
-    response = requests.get(base_url)
-    if response.status_code == 200:
-        with open("chromedriver.zip", "wb") as zip_file:
-            zip_file.write(response.content)
-        with zipfile.ZipFile("chromedriver.zip", "r") as z:
-            z.extractall()
-        os.remove("chromedriver.zip")
+    if platform != "win64":
+        base_url = f"https://googlechromelabs.github.io/chrome-for-testing/{version}/chromedriver-{platform}.zip"
+        response = requests.get(base_url)
+        if response.status_code == 200:
+            with open("chromedriver.zip", "wb") as zip_file:
+                zip_file.write(response.content)
+            with zipfile.ZipFile("chromedriver.zip", "r") as z:
+                z.extractall()
+            os.remove("chromedriver.zip")
+        else:
+            print("Unable to find the specified ChromeDriver version or platform.")
     else:
-        print("Unable to find the specified ChromeDriver version or platform.")
+        print("Skipping ChromeDriver download on Windows.")
 
 
 def download_and_extract_chromedriver(url):
@@ -30,7 +34,7 @@ def download_and_extract_chromedriver(url):
         z.extractall()
 
 # Define chromedriver path
-chromedriver = "./chromedriver"
+chromedriver_path = os.path.abspath("./chromedriver")
 
 # Clean cookies and history
 def clean_cookies_and_history():
@@ -39,12 +43,13 @@ def clean_cookies_and_history():
     history_path = os.path.join(os.getenv('LOCALAPPDATA', default_path), 'Google', 'Chrome', 'User Data', 'Default', 'History')
 
     for path, name in [(cookies_path, "Cookies"), (history_path, "History")]:
-        if os.path.isfile(path):
+        try:
             os.remove(path)
-        else:
+            print(f"{name} cleaned.")
+        except FileNotFoundError:
             print(f"The file {path} does not exist.")
-    print(f"{name} cleaned.")
-
+        except Exception as e:
+            print(f"An error occurred while cleaning {name}: {e}")
 
 # Clean chrome cache
 def clean_cache():
@@ -52,8 +57,8 @@ def clean_cache():
         if 'chrome.exe' in process.info['name'].lower():
             try:
                 process.kill()
-            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
-                pass
+            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess) as e:
+                print(f"An error occurred while cleaning cache: {e}")
     print("Cache cleaned.")
 
 # Start session
@@ -67,17 +72,17 @@ def start_session():
     
     driver.get("https://www.google.com")
     driver.delete_all_cookies()
-    driver.quit()
+    # Sleep for a specified duration (e.g., 10 seconds) to keep the session open
+    time.sleep(10)
 
+    driver.quit()
 
 # Close the webdriver
 if __name__ == '__main__':
-    get_chromedriver_url(chrome_version, platform)
+    get_chromedriver_url(chrome_version, platform_name)
     clean_cookies_and_history()
     clean_cache()
     start_session()
-    time.sleep(10)  # Wait for session to close
     clean_cookies_and_history()
     clean_cache()
     print("Cookies and cache cleaned successfully.")
-    
